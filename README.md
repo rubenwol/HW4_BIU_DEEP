@@ -3,7 +3,7 @@
 First you need to download one of the pretrained word vectors in the following link https://nlp.stanford.edu/projects/glove/
 
 And need to install the requirements:
-``pip install -r requirements``
+``pip install -r requirements.txt``
 
 To train and evaluate our results on the test set you need to run the following command:
 
