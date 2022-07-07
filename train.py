@@ -7,18 +7,30 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 import sys
+import matplotlib.pyplot as plt
 
 BATCH_SIZE = 32
 epochs = 10
 glove_path = sys.argv[1]
-path_model = 'best_model_800.pth' if '800' in glove_path else 'best_model_300.pth'
-MODEL_PATH = f'model/{path_model}'
+START_LR = float(sys.argv[2])
+DIM = int(sys.argv[3])
+P = float(sys.argv[4])
+GAMMA = 0.5
+# SEED = int(sys.argv[6])
+path_model = 'best_model_840.pth' if '840' in glove_path else 'best_model_300.pth'
+dim_glove = 840 if '840' in glove_path else 6
+
+MODEL_PATH = f'model/2_linear_{START_LR}_{DIM}_{path_model}'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+#
+# SEED = 1
+# np.random.seed(SEED)
+# torch.manual_seed(SEED)
+# torch.cuda.manual_seed(SEED)
 
 # some code take from https://pytorch.org/tutorials/beginner/basics/optimization_tutorial.html
 
 def train_loop(dataloader, model, loss_fn, optimizer):
-    size = len(dataloader.dataset)
     cum_loss = 0
     for batch, (prem, hyp, y) in enumerate(tqdm(dataloader)):
         # Compute prediction and loss
@@ -82,27 +94,56 @@ if __name__ == '__main__':
     # Initialize the loss function
     model = StackBiLSTMClassifier(
         vocab_size=len(words),
-        embedding_dim=300
+        embedding_dim=300,
+        bilstm1_dim=DIM,
+        bilstm2_dim=DIM,
+        bilstm3_dim=DIM,
+        p=P
     )
     model.encoder.embeddings.weight.data.copy_(torch.from_numpy(vecs))
     model = model.to(device)
     print(model)
-
-    lr = 0.0002
+    lr = START_LR
     # loss_fn = nn.CrossEntropyLoss()
     loss_fn = nn.NLLLoss()
     optimizer = Adam(model.parameters(), lr=lr)
-    scheduler = StepLR(optimizer, step_size=2, gamma=0.2)
+    scheduler = StepLR(optimizer, step_size=2, gamma=GAMMA)
     best_acc = 0
     best_model = model
+    val_acc, train_accs, val_losses, train_losses = [], [], [], []
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train_loss = train_loop(train_dataloader, model, loss_fn, optimizer)
+        acc_train, train_loss = test_loop(train_dataloader, model, loss_fn, dataset='TRAIN')
         acc, loss = test_loop(val_dataloader, model, loss_fn, dataset='VALIDATION')
+        val_acc.append(acc)
+        train_accs.append(acc_train)
+        val_losses.append(loss)
+        train_losses.append(acc_train)
         if acc > best_acc:
             best_acc = acc
             torch.save(model.state_dict(), MODEL_PATH)
         scheduler.step()
-        print(f"Epoch {t + 1}, Validation Accuracy: {acc * 100}, Validation Loss: {loss}, Train loss: {train_loss}")
+        print(f"Epoch {t + 1}, Validation Accuracy: {acc * 100:>0.1f},",
+              f" Validation Loss: {loss:>0.6f}, ",
+              f"Train Accuracy: {acc_train:>0.1f},",
+              f"Train loss: {train_loss:>0.6f}")
     print("Done!")
+
+    model.load_state_dict(torch.load(MODEL_PATH))
     test_loop(test_dataloader, model, loss_fn)
+
+
+    plt.title('Accuracy')
+
+    x = [i for i in range(1, len(train_accs) + 1)]
+    plt.plot(x, train_accs, label='Train Accuracy')
+    plt.plot(x, val_acc, label='Validation Accuracy')
+
+    plt.ylabel("Accuracy")
+    plt.xlabel("Epochs")
+    # plt.xticks(x)
+    plt.legend()
+    plt.savefig(f'plot/acc_2_linear_{START_LR}_{DIM}_{dim_glove}_with_unk.png')
+
+

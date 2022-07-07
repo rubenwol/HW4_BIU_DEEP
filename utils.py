@@ -21,11 +21,12 @@ class NLIDataset(Dataset):
   def __getitem__(self, idx):
     prem = [token.text for token in tokenizer(self.dataset[idx]['premise'])]
     hyp = [token.text for token in tokenizer(self.dataset[idx]['hypothesis'])]
-    prem_idx = [self.w2i.get(word.lower(), self.w2i['unk']) for word in prem]
-    hyp_idx = [self.w2i.get(word.lower(), self.w2i['unk']) for word in hyp]
-    return torch.tensor(prem_idx), torch.tensor(hyp_idx), torch.LongTensor([self.dataset[idx]['label']])
+    prem_idx = [word2idx(word, self.w2i) for word in prem]
+    hyp_idx = [word2idx(word, self.w2i) for word in hyp]
+    return torch.tensor(prem_idx), torch.tensor(hyp_idx), torch.tensor(self.dataset[idx]['label'])
 
-
+def word2idx(word, w2i):
+  return w2i.get(word, w2i.get(word.lower(), w2i['<UNK>']))
 
 def pad_collate(batch):
   (prem, hyp, y) = zip(*batch)
@@ -34,9 +35,9 @@ def pad_collate(batch):
 
   prem_pad = pad_sequence(prem, batch_first=True, padding_value=0)
   hyp_pad = pad_sequence(hyp, batch_first=True, padding_value=0)
-  y_pad = pad_sequence(y, batch_first=True, padding_value=0)
+  # y_pad = pad_sequence(torch.LongTensor(y), batch_first=True, padding_value=0)
 
-  return (prem_pad, prem_lens), (hyp_pad, hyp_lens), y_pad
+  return (prem_pad, prem_lens), (hyp_pad, hyp_lens), torch.LongTensor(y)
 
 
 
@@ -44,8 +45,12 @@ def read_glove_vector(glove_vec):
   with open(glove_vec, 'r', encoding='UTF-8') as f:
     words = []
     vecs = []
+    words.append('<UNK>')
     for line in tqdm(f):
       w_line = line.split(' ')
       words.append(w_line[0])
       vecs.append(np.array(w_line[1:], dtype=np.float64))
-  return words, np.array(vecs)
+  vecs = np.array(vecs)
+  unk_vecs = np.mean(vecs, axis=0)
+  vecs = np.concatenate((np.array([unk_vecs]), vecs), axis=0)
+  return words, vecs

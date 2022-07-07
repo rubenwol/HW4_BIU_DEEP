@@ -1,0 +1,7 @@
+torch
+matplotlib
+datasets
+numpy
+tqdm
+spacy
+torchtext

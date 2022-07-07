@@ -30,12 +30,6 @@ class BiLSTMEncoder(nn.Module):
             bidirectional=True
         )
 
-        # self.bilstm3 = nn.LSTM(
-        #     input_size=embedding_dim + (bilstm1_dim * 2) + (bilstm2_dim * 2),
-        #     hidden_size=bilstm3_dim,
-        #     batch_first=True,
-        #     bidirectional=True
-        # )
         self.bilstm3 = nn.LSTM(
             input_size=embedding_dim + (bilstm2_dim * 2),
             hidden_size=bilstm3_dim,
@@ -92,6 +86,8 @@ class StackBiLSTMClassifier(nn.Module):
 
         self.linear1 = nn.Linear(bilstm3_dim * 2 * 4, mlp_dim)
 
+        self.linear_new = nn.Linear(mlp_dim, mlp_dim)
+
         self.linear2 = nn.Linear(mlp_dim, out_dim)
 
         self.relu = nn.ReLU()
@@ -107,6 +103,8 @@ class StackBiLSTMClassifier(nn.Module):
         v_match = torch.cat([v_prem, v_hyp, torch.abs(v_prem-v_hyp), v_prem*v_hyp], dim=1)
 
         out = self.relu(self.dropout(self.linear1(v_match)))
+
+        out = self.relu(self.dropout(self.linear_new(out)))
 
         out = self.dropout(self.linear2(out))
 
